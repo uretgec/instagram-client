@@ -36,6 +36,7 @@ class InstagramClient
 	protected $url = null;
 	protected $pattern = null;
 	protected $method = null;
+	protected $header = null;
 
 	public function __construct ($client_id, $client_secret, $callback_url, $debug = false)
 	{
@@ -197,6 +198,41 @@ class InstagramClient
 		return $this->method;
 	}
 
+	public function setHeader($header)
+	{
+		/*Thanks this function: http://stackoverflow.com/a/18682872*/
+		$headers = null;
+		if($header !== null) {
+			// Split the string on every "double" new line.
+			$arrRequests = explode("\r\n\r\n", $header);
+
+			// Loop of response headers. The "count() -1" is to
+			//avoid an empty row for the extra line break before the body of the response.
+			for ($index = 0; $index < count($arrRequests) -1; $index++) {
+
+				foreach (explode("\r\n", $arrRequests[$index]) as $i => $line)
+				{
+					if ($i === 0)
+						$headers[$index]['http_code'] = $line;
+					else
+					{
+						list ($key, $value) = explode(': ', $line);
+						$headers[$index][$key] = $value;
+					}
+				}
+			}
+		}
+
+		$this->header = $headers;
+
+		return $this;
+	}
+
+	public function getHeader()
+	{
+		return $this->header;
+	}
+
 	/*
 	 * Supported Function
 	 * */
@@ -237,8 +273,7 @@ class InstagramClient
 		if(array_key_exists(ParameterConfig::RESPONSE_TYPE,$requiredParameters))
 			$params[ParameterConfig::RESPONSE_TYPE] = 'code';
 		if(array_key_exists(ParameterConfig::SCOPE,$requiredParameters))
-			if(isset($params[ParameterConfig::SCOPE]))
-				if(is_array($params[ParameterConfig::SCOPE]))
+			if(isset($params[ParameterConfig::SCOPE]) and is_array($params[ParameterConfig::SCOPE]))
 					$params[ParameterConfig::SCOPE] = implode("+",$params[ParameterConfig::SCOPE]);
 
 		$setParams = array_filter($params, function ($param) {
@@ -274,7 +309,8 @@ class InstagramClient
 		}
 
 		$response = $this->callCurl($this->getMethod(),$this->getUrl(), $this->getParameters());
-		$this->setDataResponse($response);
+		$this->setHeader($response['header']);
+		$this->setDataResponse($response['body']);
 
 		if($this->getDebug()) {
 			$this->setDump([
@@ -296,11 +332,6 @@ class InstagramClient
 
 		$this->generateResponse();
 		return $this->getDataResponse();
-	}
-
-	public function gets()
-	{
-
 	}
 
 	/*Check Response*/
@@ -335,6 +366,22 @@ class InstagramClient
 		return null;
 	}
 
+	public function isLimitExceeded()
+	{
+		if( ($header = $this->getHeader()) === null )
+			return false;
+
+		$header = current($header);
+		$maxLimit = isset($header["X-Ratelimit-Limit"]) ? $header["X-Ratelimit-Limit"] - 5 : 0; // 5000 : Always reserved last 5 request
+		$remainingLimit = isset($header["X-Ratelimit-Remaining"]) ? $header["X-Ratelimit-Remaining"] : 0;
+		$spentLimit = $maxLimit - $remainingLimit;
+
+		if($spentLimit >= $maxLimit)
+			return true;
+
+		return false;
+	}
+
 	/*
 	 * Curl
 	 * */
@@ -347,28 +394,40 @@ class InstagramClient
 		curl_setopt($ch, CURLOPT_SSLVERSION, 0);
 		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+		curl_setopt($ch, CURLOPT_HEADER, 1);
 		switch($method)
 		{
 			case MethodType::GET:
-				curl_setopt($ch, CURLOPT_HEADER, 0);
-//				curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
+//				curl_setopt($ch, CURLOPT_HEADER, 0);
 				break;
 			case MethodType::POST:
 				curl_setopt($ch, CURLOPT_POST, 1);
 				curl_setopt($ch, CURLOPT_POSTFIELDS, self::httpBuildParameters($params));
-				curl_setopt($ch, CURLOPT_HEADER, 0);
+//				curl_setopt($ch, CURLOPT_HEADER, 0);
 				curl_setopt($ch, CURLOPT_HTTPHEADER, array("Content-type" => "application/x-www-form-urlencoded"));
 				break;
 			case MethodType::DEL:
 				break;
 		}
 		$result = curl_exec($ch);
+		$info = curl_getinfo($ch);
 		curl_close($ch);
+
+		/*GET Header With Body*/
+		$headerInfo = $body = null;
+		if(isset($info['header_size']) and $info['header_size'] > 0) {
+			$headerInfo = substr($result, 0, $info['header_size']);
+			$body = substr($result, $info['header_size']);
+		}
+		/*GET Header With Body*/
 
 		if(!$result)
 			throw new \Exception("Url not response.");
 
-		return $result;
+		return [
+			'header' => $headerInfo
+			, 'body' => $body
+		];
 	}
 
 	/*

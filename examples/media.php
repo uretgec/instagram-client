@@ -19,7 +19,6 @@ spl_autoload_register(function ($className) {
 });
 
 try {
-
 	/*Debug*/
 	$instagramConfigs = include("../Instagram/Config/ApplicationConfig.php");
 	$client = mt_rand(0,count($instagramConfigs)-1);
@@ -27,8 +26,16 @@ try {
 
 	$instagramClient = new InstagramClient($getRandomClientData['client_id'],$getRandomClientData['client_secret'],$getRandomClientData['callback_url'],true);
 	$instagramClient->setAccessToken($getRandomClientData['access_token']);
-	$result = $instagramClient->get(PatternConfig::GET_MEDIA_POPULAR);
+	$instagramClient->get(PatternConfig::GET_MEDIA_POPULAR);
 	if($instagramClient->isSuccess()) {
+		if($instagramClient->isLimitExceeded()) {
+			var_dump("Limit exceed");
+		} else {
+			var_dump("Continue api request.");
+		}
+
+		var_dump($instagramClient->getHeader());
+		var_dump("-----");
 		var_dump($instagramClient->getData());
 	} else {
 		echo $instagramClient->errors();
