@@ -48,15 +48,25 @@ class YamlDumper
 		}
 	}
 
-	public function updateYml($data = null)
+	public function updateYml($client = null, $data = null)
 	{
-		if($data === null)
-			return null;
+		$this->isYmlExtensionLoaded();
 
-		if(!isset($data[$this->prefix]))
-			$data[$this->prefix] = $data;
+		if($client === null)
+			throw new \Exception("Client Number not found.");
+
+		if(!is_array($data))
+			throw new \Exception("Data must be array.");
+
+		$yamlParse = yaml_parse(file_get_contents($this->ymlFile));
+
+		$key = key($data);
+		$value = $data[$key];
+
+		if(!isset($data[$this->prefix][$client]))
+			$yamlParse[$this->prefix][$client][$key] = $value;
 
 		copy($this->ymlFile,$this->backupFolder);
-		file_put_contents($this->ymlFile,yaml_emit($data));
+		file_put_contents($this->ymlFile,yaml_emit($yamlParse));
 	}
 }

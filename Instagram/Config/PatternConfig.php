@@ -153,8 +153,8 @@ class PatternConfig
 			, self::POST_SUBSCRIBES_LOCATIONS 	=> [ParameterConfig::CLIENT_ID,ParameterConfig::CLIENT_SECRET,ParameterConfig::OBJECT,ParameterConfig::ASPECT,ParameterConfig::VERIFY_TOKEN,ParameterConfig::REDIRECT_URL]
 			, self::POST_SUBSCRIBES_GEOGRAPHYS 	=> [ParameterConfig::CLIENT_ID,ParameterConfig::CLIENT_SECRET,ParameterConfig::OBJECT,ParameterConfig::ASPECT,ParameterConfig::VERIFY_TOKEN]
 
-			, self::AUTHORIZE										=> [ParameterConfig::CLIENT_ID,ParameterConfig::REDIRECT_URL,'code' => ParameterConfig::RESPONSE_TYPE,ParameterConfig::SCOPE]
-			, self::ACCESS_TOKEN  							=> [ParameterConfig::CLIENT_ID,ParameterConfig::CLIENT_SECRET,ParameterConfig::GRANT_TYPE,ParameterConfig::REDIRECT_URL,ParameterConfig::CODE]
+			, self::AUTHORIZE										=> [ParameterConfig::CLIENT_ID,ParameterConfig::REDIRECT_URL,ParameterConfig::RESPONSE_TYPE,ParameterConfig::SCOPE]
+			, self::ACCESS_TOKEN  							=> [ParameterConfig::CLIENT_ID,ParameterConfig::CLIENT_SECRET,ParameterConfig::GRANT_TYPE,ParameterConfig::CODE,ParameterConfig::REDIRECT_URL]
 		];
 
 		if($pattern === null)

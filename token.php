@@ -20,15 +20,24 @@ spl_autoload_register(function ($className) {
 });
 
 try {
+
 	/*Debug*/
 	$instagramConfigs = include("Instagram/Config/ApplicationConfig.php");
 	$client = mt_rand(0,count($instagramConfigs)-1);
 	$getRandomClientData = $instagramConfigs[$client];
-	if($getRandomClientData['code'] !== null)
+	if($getRandomClientData['access_token'] !== null)
 		exit;
 
 	$instagramClient = new InstagramClient($getRandomClientData['client_id'],$getRandomClientData['client_secret'],$getRandomClientData['callback_url'],true);
-	$instagramClient->authorize(['scope' => $getRandomClientData['scope']]);
+	$result = $instagramClient->clientAuthorize(['code' => $getRandomClientData['code']]);
+	if($instagramClient->isAuthSuccess()) {
+		/*Yml Parser - Exporter*/
+		$parser = new \Oauth2r\Instagram\Library\YamlDumper("applications","Instagram/Config/application.yml","Instagram/Config/ApplicationConfig.php","Instagram/Backup");
+		$parser->updateYml($client, ['access_token' => $result->access_token]);
+		$parser->convert();
+	} else {
+		echo $instagramClient->errors();
+	}
 
 } catch( \Exception $e) {
 	var_dump($e->getMessage());

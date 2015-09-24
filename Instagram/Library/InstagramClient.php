@@ -35,6 +35,7 @@ class InstagramClient
 	protected $dump;
 	protected $url = null;
 	protected $pattern = null;
+	protected $method = null;
 
 	public function __construct ($client_id, $client_secret, $callback_url, $debug = false)
 	{
@@ -184,9 +185,26 @@ class InstagramClient
 		return $this->pattern;
 	}
 
+	public function setMethod($method)
+	{
+		$this->method = $method;
+
+		return $this;
+	}
+
+	public function getMethod()
+	{
+		return $this->method;
+	}
+
 	/*
 	 * Supported Function
 	 * */
+
+	protected function httpBuildParameters($params)
+	{
+		return http_build_query($params, null, '&');
+	}
 	protected function generateRequestUrl()
 	{
 		$patternUri = PatternConfig::getUrl($this->getPattern());
@@ -208,15 +226,21 @@ class InstagramClient
 			$params = array_merge($params,$this->getParameters());
 
 		if(array_key_exists(ParameterConfig::CLIENT_ID,$requiredParameters))
-			$params['client_id'] = $this->getClientId();
+			$params[ParameterConfig::CLIENT_ID] = $this->getClientId();
 		if(array_key_exists(ParameterConfig::CLIENT_SECRET,$requiredParameters))
-			$params['client_secret'] = $this->getClientSecret();
+			$params[ParameterConfig::CLIENT_SECRET] = $this->getClientSecret();
 		if(array_key_exists(ParameterConfig::REDIRECT_URL,$requiredParameters))
-			$params['redirect_uri'] = $this->getCallbackUrl();
+			$params[ParameterConfig::REDIRECT_URL] = $this->getCallbackUrl();
 		if(array_key_exists(ParameterConfig::ACCESS_TOKEN,$requiredParameters))
-			$params['access_token'] = $this->getAccessToken();
+			$params[ParameterConfig::ACCESS_TOKEN] = $this->getAccessToken();
 		if(array_key_exists(ParameterConfig::GRANT_TYPE,$requiredParameters))
-			$params['grant_type'] = 'authorization_code';
+			$params[ParameterConfig::GRANT_TYPE] = 'authorization_code';
+		if(array_key_exists(ParameterConfig::RESPONSE_TYPE,$requiredParameters))
+			$params[ParameterConfig::RESPONSE_TYPE] = 'code';
+		if(array_key_exists(ParameterConfig::SCOPE,$requiredParameters))
+			if(isset($params[ParameterConfig::SCOPE]))
+				if(is_array($params[ParameterConfig::SCOPE]))
+					$params[ParameterConfig::SCOPE] = implode("+",$params[ParameterConfig::SCOPE]);
 
 		$setParams = array_filter($params, function ($param) {
 			return !is_null($param);
@@ -234,21 +258,24 @@ class InstagramClient
 		}
 
 		$this->setParameters($setParams);
-		// Request: https://api.instagram.com/oauth/authorize/?client_id=CLIENT-ID&redirect_uri=REDIRECT-URI&response_type=code
-		// Success: http://your-redirect-uri?code=CODE
-		// Error: http://your-redirect-uri?error=access_denied&error_reason=user_denied&error_description=The+user+denied+your+request
 
-		$url = sprintf(self::API_URL.$patternUri."?%s",http_build_query($this->getParameters(), null, '&'));
+		$url = sprintf(self::API_URL.$patternUri."?%s",$this->httpBuildParameters($this->getParameters()));
+		if($this->getMethod() == MethodType::POST)
+			$url = sprintf(self::API_URL.$patternUri);
+
 		$this->setUrl($url);
 	}
 
-	protected function generateResponse($method)
+	protected function generateResponse()
 	{
 		$this->generateRequestUrl();
+		if($this->getPattern() == PatternConfig::AUTHORIZE) {
+			header('Location: '.$this->getUrl());
+			exit;
+		}
 
-		var_dump($this->getUrl());
-		exit;
-		$response = $this->callCurl($method,$this->getUrl(), $this->getParameters());
+		$response = $this->callCurl($this->getMethod(),$this->getUrl(), $this->getParameters());
+		$this->setData(json_decode($response));
 		$this->setDataResponse($response);
 
 		if($this->getDebug()) {
@@ -265,29 +292,38 @@ class InstagramClient
 		if(!array_key_exists($pattern, PatternConfig::getUrl()))
 			throw new \Exception("Pattern not found.");
 
+		$this->setMethod($method);
 		$this->setPattern($pattern);
 		$this->setParameters($params);
 
-		$this->generateResponse($method);
+		$this->generateResponse();
 		return $this->getData();
 	}
 
 	/*Check Response*/
-	public function isSuccess()
+	public function isAuthSuccess()
 	{
 		$response = $this->getData();
-		if(isset($response['result']) and $response['result'] === ResultType::SUCCESS)
+		if(isset($response->access_token) and $response->access_token !== null)
 			return true;
+
+		return false;
+	}
+
+	public function isSuccess()
+	{
+//		$response = $this->getData();
+//		if(isset($response['result']) and $response['result'] === ResultType::SUCCESS)
+//			return true;
 
 		return false;
 	}
 
 	public function errors()
 	{
-		// Error: http://your-redirect-uri?error=access_denied&error_reason=user_denied&error_description=The+user+denied+your+request
 		$response = $this->getData();
-		if(isset($response['result']) and $response['result'] === ResultType::ERROR)
-			return $response['message'] || null;
+		if(isset($response->code) and $response->code > 0)
+			return $response->error_type. ":" .$response->error_message;
 
 		return null;
 	}
@@ -295,45 +331,57 @@ class InstagramClient
 	/*
 	 * Curl
 	 * */
-	public static function callCurl($method,$url, $params)
+	public static function callCurl($method,$url,$params)
 	{
 		$ch = curl_init();
 		curl_setopt($ch, CURLOPT_URL, $url);
-		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
+		curl_setopt($ch, CURLOPT_TIMEOUT, 90);
 		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
 		curl_setopt($ch, CURLOPT_SSLVERSION, 0);
 		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-		curl_setopt($ch, CURLOPT_POST, 1);
-		curl_setopt($ch, CURLOPT_POSTFIELDS, $params);
-		curl_setopt($ch, CURLOPT_HEADER, FALSE);
-		curl_setopt($ch, CURLOPT_HTTPHEADER, array("Content-type" => "application/x-www-form-urlencoded"));
-//        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
-		$result = curl_exec($ch);
 
+		switch($method)
+		{
+			case MethodType::GET:
+//				$tmpfname = dirname(__FILE__).'/cookie.txt';
+//				curl_setopt($ch, CURLOPT_COOKIEJAR, $tmpfname);
+//				curl_setopt($ch, CURLOPT_COOKIEFILE, $tmpfname);
+				curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+				curl_setopt($ch, CURLOPT_HEADER, 0);
+				curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
+				break;
+			case MethodType::POST:
+				curl_setopt($ch, CURLOPT_POST, 1);
+				curl_setopt($ch, CURLOPT_POSTFIELDS, self::httpBuildParameters($params));
+				curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+				curl_setopt($ch, CURLOPT_HEADER, 0);
+				curl_setopt($ch, CURLOPT_HTTPHEADER, array("Content-type" => "application/x-www-form-urlencoded"));
+				break;
+			case MethodType::DEL:
+				break;
+		}
+		$result = curl_exec($ch);
 		curl_close($ch);
 
 		if(!$result)
-			throw new \Exception(
-				sprintf(
-					'%s url not response.',
-					$url
-				));
+			throw new \Exception("Url not response.");
 
 		return $result;
 	}
 
-
 	/*
 	 * Authorization
 	 * */
-	public function clientAuthorize()
+	public function clientAuthorize($params = null)
 	{
-
+		$response = $this->doRequest(MethodType::POST,PatternConfig::ACCESS_TOKEN,$params);
+		return $response;
 	}
-	public function authorize()
-	{
 
+	public function authorize($params = null)
+	{
+		$response = $this->doRequest(MethodType::GET,PatternConfig::AUTHORIZE,$params);
+		return $response;
 	}
 
 	/*
@@ -341,6 +389,9 @@ class InstagramClient
 	 * */
 	public function get($pattern = null,$params = null)
 	{
+		if($pattern == PatternConfig::AUTHORIZE or $pattern == PatternConfig::ACCESS_TOKEN)
+			throw new \Exception("Not allowed pattern.");
+
 		$response = $this->doRequest(MethodType::GET,$pattern,$params);
 		return $response;
 	}
@@ -350,6 +401,9 @@ class InstagramClient
 	 * */
 	public function post($pattern = null,$params = null)
 	{
+		if($pattern == PatternConfig::AUTHORIZE or $pattern == PatternConfig::ACCESS_TOKEN)
+			throw new \Exception("Not allowed pattern.");
+
 		$response = $this->doRequest(MethodType::POST,$pattern,$params);
 		return $response;
 	}
@@ -359,6 +413,9 @@ class InstagramClient
 	 * */
 	public function del($pattern = null,$params = null)
 	{
+		if($pattern == PatternConfig::AUTHORIZE or $pattern == PatternConfig::ACCESS_TOKEN)
+			throw new \Exception("Not allowed pattern.");
+
 		$response = $this->doRequest(MethodType::DEL,$pattern,$params);
 		return $response;
 	}
@@ -368,6 +425,9 @@ class InstagramClient
 	 * */
 	public function subscribe($pattern = null,$params = null)
 	{
+		if($pattern == PatternConfig::AUTHORIZE or $pattern == PatternConfig::ACCESS_TOKEN)
+			throw new \Exception("Not allowed pattern.");
+
 		$response = $this->doRequest(MethodType::GET,$pattern,$params);
 		return $response;
 	}
