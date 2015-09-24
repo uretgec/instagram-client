@@ -118,7 +118,7 @@ class InstagramClient
 
 	public function setDataResponse($data_response)
 	{
-		$this->data_response = $data_response;
+		$this->data_response = json_decode($data_response);
 		return $this;
 	}
 
@@ -200,7 +200,6 @@ class InstagramClient
 	/*
 	 * Supported Function
 	 * */
-
 	protected function httpBuildParameters($params)
 	{
 		return http_build_query($params, null, '&');
@@ -275,12 +274,11 @@ class InstagramClient
 		}
 
 		$response = $this->callCurl($this->getMethod(),$this->getUrl(), $this->getParameters());
-		$this->setData(json_decode($response));
 		$this->setDataResponse($response);
 
 		if($this->getDebug()) {
 			$this->setDump([
-				'response' => $this->getDataResponse()
+				'response' => $response
 				, 'url' => $this->getUrl()
 				, 'params' => $this->getParameters(),
 			]);
@@ -297,13 +295,18 @@ class InstagramClient
 		$this->setParameters($params);
 
 		$this->generateResponse();
-		return $this->getData();
+		return $this->getDataResponse();
+	}
+
+	public function gets()
+	{
+
 	}
 
 	/*Check Response*/
 	public function isAuthSuccess()
 	{
-		$response = $this->getData();
+		$response = $this->getDataResponse();
 		if(isset($response->access_token) and $response->access_token !== null)
 			return true;
 
@@ -312,16 +315,20 @@ class InstagramClient
 
 	public function isSuccess()
 	{
-//		$response = $this->getData();
-//		if(isset($response['result']) and $response['result'] === ResultType::SUCCESS)
-//			return true;
+		$response = $this->getDataResponse();
+		if(isset($response->meta) and isset($response->meta->code) and $response->meta->code == 200) {
+			if(isset($response->data) and count($response->data) > 0)
+				$this->setData($response->data);
+
+			return true;
+		}
 
 		return false;
 	}
 
 	public function errors()
 	{
-		$response = $this->getData();
+		$response = $this->getDataResponse();
 		if(isset($response->code) and $response->code > 0)
 			return $response->error_type. ":" .$response->error_message;
 
@@ -339,21 +346,16 @@ class InstagramClient
 		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
 		curl_setopt($ch, CURLOPT_SSLVERSION, 0);
 		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		switch($method)
 		{
 			case MethodType::GET:
-//				$tmpfname = dirname(__FILE__).'/cookie.txt';
-//				curl_setopt($ch, CURLOPT_COOKIEJAR, $tmpfname);
-//				curl_setopt($ch, CURLOPT_COOKIEFILE, $tmpfname);
-				curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 				curl_setopt($ch, CURLOPT_HEADER, 0);
-				curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
+//				curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
 				break;
 			case MethodType::POST:
 				curl_setopt($ch, CURLOPT_POST, 1);
 				curl_setopt($ch, CURLOPT_POSTFIELDS, self::httpBuildParameters($params));
-				curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 				curl_setopt($ch, CURLOPT_HEADER, 0);
 				curl_setopt($ch, CURLOPT_HTTPHEADER, array("Content-type" => "application/x-www-form-urlencoded"));
 				break;
