@@ -1,0 +1,21 @@
+---
+applications:
+- client_id: ~
+  client_secret: ~
+  website_url: ~
+  callback_url: ~
+  support_email: ~
+  scope:
+  - basic
+  code: ~
+  access_token: ~
+- client_id: ~
+  client_secret: ~
+  website_url: ~
+  callback_url: ~
+  support_email: ~
+  scope:
+  - basic
+  code: ~
+  access_token: ~
+...
