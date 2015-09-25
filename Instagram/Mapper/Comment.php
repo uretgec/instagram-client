@@ -1,0 +1,18 @@
+<?php
+/** 
+ * User: Tuna
+ * Date: 16.09.2015
+ * Time: 01:21
+ * Company: Uretgec
+ * URI: www.uretgec.com
+ */
+
+namespace Oauth2r\Instagram\Mapper;
+
+class Comment extends Base
+{
+	public $id;
+	public $created_time; // Timestamp
+	public $text;
+	public $from = array(); // User Class
+}
