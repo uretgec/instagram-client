@@ -33,3 +33,6 @@ examples/media.php
 
 # Coming Soon
 * Mapper functions will added. (Response data mapped your own mapping object)
+
+### Changelog
+* v0.1 : Release date 26.08.2015
